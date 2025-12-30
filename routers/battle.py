@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from database import get_db, AsyncSessionLocal
 from models import Anime
 from schemas import VoteResponse
-from services import get_random_pair, calculate_elo_update, normalize_scores_task
+from services import get_match_pair, calculate_elo_update, normalize_scores_task
 
 router = APIRouter(prefix="/battle", tags=["battle"])
 templates = Jinja2Templates(directory="templates")
@@ -29,9 +29,20 @@ CATEGORIES = [
 
 @router.get("", response_class=HTMLResponse)
 async def get_battle(request: Request, db: SessionDep):
-    anime1, anime2 = await get_random_pair(db)
+    # 변경된 서비스 함수 호출 (Smart Matchmaking 적용)
+    anime1, anime2 = await get_match_pair(db)
+
     if not anime1 or not anime2:
-        return HTMLResponse("애니메이션 데이터가 부족합니다.", status_code=200)
+        return HTMLResponse(
+            content="""
+            <div style='text-align:center; padding:50px;'>
+                <h2>데이터가 부족합니다.</h2>
+                <p>관리자 페이지에서 애니메이션을 추가해주세요.</p>
+                <a href='/manage'>관리 페이지로 이동</a>
+            </div>
+            """,
+            status_code=200,
+        )
 
     selected_category = random.choice(CATEGORIES)
 
@@ -49,7 +60,9 @@ async def get_battle(request: Request, db: SessionDep):
 
 @router.get("/focus/{anime_id}", response_class=HTMLResponse)
 async def focus_battle(anime_id: int, request: Request, db: SessionDep):
-    anime1, anime2 = await get_random_pair(db, focus_id=anime_id)
+    # 변경된 서비스 함수 호출 (Focus ID 전달)
+    anime1, anime2 = await get_match_pair(db, focus_id=anime_id)
+
     if not anime1:
         return HTMLResponse("존재하지 않는 애니메이션입니다.", status_code=404)
     if not anime2:
@@ -89,14 +102,20 @@ async def vote(
     if not a1 or not a2:
         return JSONResponse({"error": "Anime not found"}, status_code=404)
 
+    # 동적 속성 접근
     attr_name = f"rating_{category}"
     old_r1 = getattr(a1, attr_name)
     old_r2 = getattr(a2, attr_name)
 
     # Determine Result
-    actual_score = 1.0 if winner == "1" else (0.0 if winner == "2" else 0.5)
+    if winner == "1":
+        actual_score = 1.0
+    elif winner == "2":
+        actual_score = 0.0
+    else:
+        actual_score = 0.5  # Draw
 
-    # Calculate Elo
+    # Calculate Elo (Updated logic used internally)
     new_r1, new_r2 = calculate_elo_update(
         old_r1, old_r2, actual_score, a1.matches_played, a2.matches_played
     )
@@ -109,9 +128,7 @@ async def vote(
 
     await db.commit()
 
-    # Trigger Background Normalization (Performance Optimization)
-    # 매 투표마다 실행하면 무거울 수 있으나, 비동기이므로 사용자 응답성에는 영향 없음
-    # AsyncSessionLocal을 팩토리로 넘겨 백그라운드에서 새 세션을 열도록 함
+    # Trigger Background Normalization
     background_tasks.add_task(normalize_scores_task, AsyncSessionLocal)
 
     response_data = {
