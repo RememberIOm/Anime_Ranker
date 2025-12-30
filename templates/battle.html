@@ -1,252 +1,228 @@
-<!DOCTYPE html>
-<html lang="ko">
+{% extends "base.html" %}
 
-<head>
-    <meta charset="UTF-8">
-    <title>Battle!</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-        /* 애니메이션용 CSS */
-        @keyframes floatUp {
-            0% {
-                transform: translateY(0);
-                opacity: 1;
-            }
-
-            100% {
-                transform: translateY(-40px);
-                opacity: 0;
-            }
-        }
-
-        .float-anim {
-            animation: floatUp 1.5s ease-out forwards;
-        }
-
-        .scale-in {
-            animation: scaleIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
-        }
-
-        @keyframes scaleIn {
-            from {
-                transform: scale(0.8);
-                opacity: 0;
-            }
-
-            to {
-                transform: scale(1);
-                opacity: 1;
-            }
-        }
-    </style>
-</head>
-
-<body class="bg-gray-900 text-white min-h-screen flex flex-col items-center justify-center relative overflow-hidden">
+{% block content %}
+<div class="relative flex flex-col items-center justify-center min-h-[80vh]">
 
     <!-- 집중 모드 알림 -->
     {% if focus_mode %}
-    <div class="absolute top-4 left-0 w-full text-center z-10">
-        <div class="inline-block bg-blue-600 px-4 py-1 rounded-full text-sm font-bold shadow-lg animate-pulse">
-            🎯 '{{ anime1.name }}' 집중 평가 중
-        </div>
-        <div class="mt-1">
-            <a href="/manage" class="text-xs text-gray-400 underline hover:text-white">나가기</a>
+    <div class="fixed top-20 left-1/2 transform -translate-x-1/2 z-40">
+        <div
+            class="bg-blue-600/90 text-white px-6 py-2 rounded-full text-sm font-bold shadow-lg flex items-center gap-2 backdrop-blur-sm">
+            <span class="animate-pulse">🎯</span>
+            <span>'{{ anime1.name }}' 집중 평가 중</span>
+            <a href="/manage" class="ml-2 text-blue-200 hover:text-white underline text-xs">종료</a>
         </div>
     </div>
     {% endif %}
 
-    <div class="mb-8 text-center z-10">
-        <span class="text-sm text-gray-400 uppercase tracking-widest">Current Match Category</span>
-        <h2 class="text-4xl font-extrabold text-yellow-400 mt-2">{{ category_name }}</h2>
-        <p class="text-gray-300 mt-2">더 뛰어난 쪽을 선택하세요!</p>
+    <!-- 헤더 섹션 -->
+    <div class="text-center mb-12 z-10">
+        <p class="text-brand-600 dark:text-brand-400 font-bold uppercase tracking-widest text-xs mb-2">Battle Arena</p>
+        <h2 class="text-3xl md:text-5xl font-black text-gray-900 dark:text-white">
+            어느 쪽의 <span class="text-transparent bg-clip-text bg-gradient-to-r from-brand-600 to-pink-500">{{
+                category_name }}</span>?
+        </h2>
     </div>
 
-    <!-- 메인 대결 영역 -->
-    <div class="w-full max-w-5xl flex flex-col md:flex-row justify-between items-center gap-6 px-4 z-10">
+    <!-- 대결 카드 영역 -->
+    <div class="w-full max-w-6xl grid grid-cols-1 md:grid-cols-[1fr_auto_1fr] gap-8 items-center">
 
         <!-- Anime 1 -->
         <div id="card-1" onclick="submitVote('1')"
-            class="relative w-full md:w-1/2 bg-gray-800 hover:bg-blue-900 p-8 md:p-12 rounded-2xl border-2 border-gray-700 hover:border-blue-500 transition-all transform hover:-translate-y-2 cursor-pointer group shadow-2xl">
-            <h3 class="text-2xl md:text-4xl font-bold group-hover:text-blue-400 text-center break-words leading-tight">
-                {{ anime1.name
-                }}</h3>
-            <div class="mt-4 text-center text-gray-500 font-mono">Rating: {{ anime1['rating_' + category_key]|round|int
-                }}</div>
-            <!-- 승리 시 효과용 -->
+            class="group relative bg-white dark:bg-gray-800 rounded-3xl p-8 shadow-xl hover:shadow-2xl hover:shadow-brand-500/20 border-2 border-transparent hover:border-brand-500 cursor-pointer transition-all duration-300 transform hover:-translate-y-2 h-full flex flex-col justify-center min-h-[250px] md:min-h-[400px]">
+            <div
+                class="absolute -top-4 -left-4 w-12 h-12 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center font-black text-xl text-gray-400 group-hover:bg-brand-500 group-hover:text-white transition-colors">
+                A</div>
+            <h3
+                class="text-3xl md:text-4xl font-black text-center text-gray-800 dark:text-gray-100 group-hover:text-brand-600 dark:group-hover:text-brand-400 break-keep leading-tight transition-colors">
+                {{ anime1.name }}
+            </h3>
+            <div class="mt-6 flex justify-center">
+                <span
+                    class="bg-gray-100 dark:bg-gray-700 px-4 py-1 rounded-full text-sm font-mono text-gray-500 dark:text-gray-400 group-hover:text-brand-600 dark:group-hover:text-brand-300 transition-colors">
+                    Current Rating: {{ anime1['rating_' + category_key]|round|int }}
+                </span>
+            </div>
+            <!-- 선택 오버레이 -->
             <div id="result-overlay-1"
-                class="absolute inset-0 bg-blue-600/20 hidden rounded-2xl border-4 border-blue-500"></div>
+                class="absolute inset-0 bg-brand-600/10 dark:bg-brand-400/10 rounded-3xl border-4 border-brand-500 hidden transition-all">
+                <div class="absolute inset-0 flex items-center justify-center">
+                    <span
+                        class="bg-brand-600 text-white text-2xl font-bold px-6 py-2 rounded-full shadow-lg transform -rotate-12">WINNER</span>
+                </div>
+            </div>
         </div>
 
-        <div class="flex flex-col gap-4 items-center shrink-0">
-            <div class="text-3xl font-bold text-gray-600 italic">VS</div>
+        <!-- VS Button -->
+        <div class="flex flex-col items-center gap-4 z-20">
+            <div
+                class="w-16 h-16 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center font-black text-xl italic text-gray-500 dark:text-gray-400 shadow-inner">
+                VS
+            </div>
             <button onclick="submitVote('draw')"
-                class="px-6 py-2 bg-gray-700 hover:bg-gray-600 rounded-full text-sm text-gray-300 border border-gray-600 transition">
+                class="px-6 py-2 rounded-full border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 font-bold text-sm transition-colors whitespace-nowrap shadow-sm">
                 무승부
             </button>
         </div>
 
         <!-- Anime 2 -->
         <div id="card-2" onclick="submitVote('2')"
-            class="relative w-full md:w-1/2 bg-gray-800 hover:bg-red-900 p-8 md:p-12 rounded-2xl border-2 border-gray-700 hover:border-red-500 transition-all transform hover:-translate-y-2 cursor-pointer group shadow-2xl">
-            <h3 class="text-2xl md:text-4xl font-bold group-hover:text-red-400 text-center break-words leading-tight">{{
-                anime2.name }}
+            class="group relative bg-white dark:bg-gray-800 rounded-3xl p-8 shadow-xl hover:shadow-2xl hover:shadow-pink-500/20 border-2 border-transparent hover:border-pink-500 cursor-pointer transition-all duration-300 transform hover:-translate-y-2 h-full flex flex-col justify-center min-h-[250px] md:min-h-[400px]">
+            <div
+                class="absolute -top-4 -right-4 w-12 h-12 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center font-black text-xl text-gray-400 group-hover:bg-pink-500 group-hover:text-white transition-colors">
+                B</div>
+            <h3
+                class="text-3xl md:text-4xl font-black text-center text-gray-800 dark:text-gray-100 group-hover:text-pink-600 dark:group-hover:text-pink-400 break-keep leading-tight transition-colors">
+                {{ anime2.name }}
             </h3>
-            <div class="mt-4 text-center text-gray-500 font-mono">Rating: {{ anime2['rating_' + category_key]|round|int
-                }}</div>
-            <!-- 승리 시 효과용 -->
+            <div class="mt-6 flex justify-center">
+                <span
+                    class="bg-gray-100 dark:bg-gray-700 px-4 py-1 rounded-full text-sm font-mono text-gray-500 dark:text-gray-400 group-hover:text-pink-600 dark:group-hover:text-pink-300 transition-colors">
+                    Current Rating: {{ anime2['rating_' + category_key]|round|int }}
+                </span>
+            </div>
+            <!-- 선택 오버레이 -->
             <div id="result-overlay-2"
-                class="absolute inset-0 bg-red-600/20 hidden rounded-2xl border-4 border-red-500"></div>
-        </div>
-    </div>
-
-    <!-- 결과 애니메이션 모달 (평소엔 숨김) -->
-    <div id="result-modal"
-        class="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 hidden opacity-0 transition-opacity duration-300">
-        <div class="bg-gray-900 p-8 rounded-2xl border border-gray-600 shadow-2xl text-center max-w-lg w-full scale-in">
-            <h3 class="text-2xl font-bold text-white mb-8">ELO Rating Updated!</h3>
-
-            <div class="flex justify-between items-center px-4">
-                <!-- Anime 1 Result -->
-                <div class="flex flex-col items-center">
-                    <span class="text-gray-400 text-sm mb-1 truncate w-24">{{ anime1.name }}</span>
-                    <span id="score-1" class="text-4xl font-mono font-bold text-white">1200</span>
-                    <span id="diff-1"
-                        class="text-lg font-bold mt-2 opacity-0 transform translate-y-4 transition-all duration-500">+0</span>
-                </div>
-
-                <div class="text-gray-600">➜</div>
-
-                <!-- Anime 2 Result -->
-                <div class="flex flex-col items-center">
-                    <span class="text-gray-400 text-sm mb-1 truncate w-24">{{ anime2.name }}</span>
-                    <span id="score-2" class="text-4xl font-mono font-bold text-white">1200</span>
-                    <span id="diff-2"
-                        class="text-lg font-bold mt-2 opacity-0 transform translate-y-4 transition-all duration-500">-0</span>
+                class="absolute inset-0 bg-pink-600/10 dark:bg-pink-400/10 rounded-3xl border-4 border-pink-500 hidden transition-all">
+                <div class="absolute inset-0 flex items-center justify-center">
+                    <span
+                        class="bg-pink-600 text-white text-2xl font-bold px-6 py-2 rounded-full shadow-lg transform rotate-12">WINNER</span>
                 </div>
             </div>
+        </div>
 
-            <div class="mt-8">
-                <div class="h-1 w-full bg-gray-700 rounded-full overflow-hidden">
-                    <div id="progress-bar" class="h-full bg-yellow-400 w-0 transition-all duration-[1500ms] ease-out">
-                    </div>
-                </div>
-                <p class="text-xs text-gray-500 mt-2">다음 대결 준비 중...</p>
+    </div>
+</div>
+
+<!-- 결과 모달 -->
+<div id="result-modal"
+    class="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 hidden opacity-0 transition-opacity duration-300">
+    <div
+        class="bg-white dark:bg-gray-900 p-8 rounded-3xl shadow-2xl max-w-md w-full mx-4 border border-gray-200 dark:border-gray-700 transform scale-95 transition-transform duration-300">
+        <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-6 text-center">Rating Update</h3>
+
+        <div class="flex justify-between items-center mb-8 px-2">
+            <!-- P1 -->
+            <div class="text-center">
+                <div class="text-xs text-gray-500 mb-1 truncate w-24 mx-auto">{{ anime1.name }}</div>
+                <div id="score-1" class="text-3xl font-mono font-bold text-gray-800 dark:text-gray-100">1200</div>
+                <div id="diff-1" class="text-sm font-bold mt-1 opacity-0 transform translate-y-2 transition-all"></div>
+            </div>
+
+            <div class="text-gray-300 dark:text-gray-600">➜</div>
+
+            <!-- P2 -->
+            <div class="text-center">
+                <div class="text-xs text-gray-500 mb-1 truncate w-24 mx-auto">{{ anime2.name }}</div>
+                <div id="score-2" class="text-3xl font-mono font-bold text-gray-800 dark:text-gray-100">1200</div>
+                <div id="diff-2" class="text-sm font-bold mt-1 opacity-0 transform translate-y-2 transition-all"></div>
             </div>
         </div>
+
+        <div class="w-full h-1.5 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
+            <div id="progress-bar" class="h-full bg-brand-500 w-0 transition-all duration-[800ms] ease-out"></div>
+        </div>
+        <p class="text-center text-xs text-gray-400 mt-4">잠시 후 다음 대결로 이동합니다...</p>
     </div>
+</div>
 
-    <a href="/" class="mt-12 text-gray-500 hover:text-white underline z-10">메인으로 돌아가기</a>
+{% endblock %}
 
-    <!-- 데이터 전송용 숨겨진 폼 데이터 -->
-    <script>
-        const anime1Id = "{{ anime1.id }}";
-        const anime2Id = "{{ anime2.id }}";
-        const categoryKey = "{{ category_key }}";
-        // Jinja2 템플릿 변수를 JS 문자열로 안전하게 변환
-        const redirectTo = "{% if focus_mode %}/battle/focus/{{ focus_id }}{% endif %}";
+{% block scripts %}
+<script>
+    const anime1Id = "{{ anime1.id }}";
+    const anime2Id = "{{ anime2.id }}";
+    const categoryKey = "{{ category_key }}";
+    const redirectTo = "{% if focus_mode %}/battle/focus/{{ focus_id }}{% endif %}";
 
-        async function submitVote(winner) {
-            // 1. UI 즉각 반응 (클릭한 카드 강조)
-            if (winner === '1') document.getElementById('result-overlay-1').classList.remove('hidden');
-            if (winner === '2') document.getElementById('result-overlay-2').classList.remove('hidden');
+    async function submitVote(winner) {
+        if (winner === '1') document.getElementById('result-overlay-1').classList.remove('hidden');
+        if (winner === '2') document.getElementById('result-overlay-2').classList.remove('hidden');
 
-            // 2. 서버로 AJAX 요청 전송
-            const formData = new FormData();
-            formData.append('anime1_id', anime1Id);
-            formData.append('anime2_id', anime2Id);
-            formData.append('category', categoryKey);
-            formData.append('winner', winner);
-            if (redirectTo) formData.append('redirect_to', redirectTo);
+        const formData = new FormData();
+        formData.append('anime1_id', anime1Id);
+        formData.append('anime2_id', anime2Id);
+        formData.append('category', categoryKey);
+        formData.append('winner', winner);
+        if (redirectTo) formData.append('redirect_to', redirectTo);
 
-            try {
-                const response = await fetch('/battle/vote', {
-                    method: 'POST',
-                    body: formData,
-                    headers: {
-                        'X-Requested-With': 'XMLHttpRequest' // AJAX 요청임을 표시
-                    }
-                });
-
-                const data = await response.json();
-                showResultAnimation(data);
-
-            } catch (error) {
-                console.error('Error:', error);
-                location.reload(); // 에러나면 그냥 새로고침
-            }
+        try {
+            const response = await fetch('/battle/vote', {
+                method: 'POST',
+                body: formData,
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            });
+            const data = await response.json();
+            showResultAnimation(data);
+        } catch (error) {
+            console.error('Error:', error);
+            location.reload();
         }
+    }
 
-        function showResultAnimation(data) {
-            const modal = document.getElementById('result-modal');
-            const score1El = document.getElementById('score-1');
-            const diff1El = document.getElementById('diff-1');
-            const score2El = document.getElementById('score-2');
-            const diff2El = document.getElementById('diff-2');
-            const progressBar = document.getElementById('progress-bar');
+    function showResultAnimation(data) {
+        const modal = document.getElementById('result-modal');
+        const score1El = document.getElementById('score-1');
+        const diff1El = document.getElementById('diff-1');
+        const score2El = document.getElementById('score-2');
+        const diff2El = document.getElementById('diff-2');
+        const progressBar = document.getElementById('progress-bar');
+        const modalContent = modal.querySelector('div');
 
-            // 1. 모달 띄우기
-            modal.classList.remove('hidden');
-            setTimeout(() => { modal.classList.remove('opacity-0'); }, 10);
+        modal.classList.remove('hidden');
+        // 강제 리플로우
+        void modal.offsetWidth;
+        modal.classList.remove('opacity-0');
+        modalContent.classList.remove('scale-95');
+        modalContent.classList.add('scale-100');
 
-            // 2. 초기 숫자 세팅
-            score1El.innerText = data.old_r1;
-            score2El.innerText = data.old_r2;
+        score1El.innerText = data.old_r1;
+        score2El.innerText = data.old_r2;
 
-            setDiffStyle(diff1El, data.diff_r1);
-            setDiffStyle(diff2El, data.diff_r2);
+        setDiffStyle(diff1El, data.diff_r1);
+        setDiffStyle(diff2El, data.diff_r2);
 
-            // 3. 숫자 카운팅 애니메이션 (0.1초 후 시작, 속도 개선)
-            setTimeout(() => {
-                animateValue(score1El, data.old_r1, data.new_r1, 500); // 500ms 동안 숫자 변화
-                animateValue(score2El, data.old_r2, data.new_r2, 500);
+        setTimeout(() => {
+            animateValue(score1El, data.old_r1, data.new_r1, 500);
+            animateValue(score2El, data.old_r2, data.new_r2, 500);
 
-                diff1El.classList.remove('opacity-0', 'translate-y-4');
-                diff2El.classList.remove('opacity-0', 'translate-y-4');
+            diff1El.classList.remove('opacity-0', 'translate-y-2');
+            diff2El.classList.remove('opacity-0', 'translate-y-2');
 
-                // 진행바 스타일 수정: 1초짜리 애니메이션 (duration-[1000ms])
-                progressBar.className = "h-full bg-yellow-400 w-0 transition-all duration-[1000ms] ease-out";
-                // 약간의 틱(tick) 이후 실행해야 transition이 먹음
-                requestAnimationFrame(() => {
-                    progressBar.style.width = "100%";
-                });
+            progressBar.style.width = "100%";
+        }, 100);
 
-            }, 100);
+        setTimeout(() => {
+            window.location.href = data.next_url;
+        }, 1200);
+    }
 
-            // 4. 완료 후 이동 (총 1.2초 후 이동)
-            setTimeout(() => {
-                window.location.href = data.next_url;
-            }, 1200);
+    function setDiffStyle(element, diff) {
+        if (diff > 0) {
+            element.innerText = "+" + diff;
+            element.className = "text-sm font-bold mt-1 text-green-500 dark:text-green-400 transition-all duration-500";
+        } else if (diff < 0) {
+            element.innerText = diff;
+            element.className = "text-sm font-bold mt-1 text-red-500 dark:text-red-400 transition-all duration-500";
+        } else {
+            element.innerText = "-";
+            element.className = "text-sm font-bold mt-1 text-gray-400 transition-all duration-500";
         }
+    }
 
-        function setDiffStyle(element, diff) {
-            if (diff > 0) {
-                element.innerText = "+" + diff;
-                element.className = "text-xl font-bold mt-2 text-green-400 transition-all duration-500 float-anim";
-            } else if (diff < 0) {
-                element.innerText = diff;
-                element.className = "text-xl font-bold mt-2 text-red-500 transition-all duration-500 float-anim";
+    function animateValue(obj, start, end, duration) {
+        let startTimestamp = null;
+        const step = (timestamp) => {
+            if (!startTimestamp) startTimestamp = timestamp;
+            const progress = Math.min((timestamp - startTimestamp) / duration, 1);
+            obj.innerHTML = Math.floor(progress * (end - start) + start);
+            if (progress < 1) {
+                window.requestAnimationFrame(step);
             } else {
-                element.innerText = "-";
-                element.className = "text-xl font-bold mt-2 text-gray-500 transition-all duration-500";
+                obj.innerHTML = end;
             }
-        }
-
-        // 숫자 굴러가는 효과 함수
-        function animateValue(obj, start, end, duration) {
-            let startTimestamp = null;
-            const step = (timestamp) => {
-                if (!startTimestamp) startTimestamp = timestamp;
-                const progress = Math.min((timestamp - startTimestamp) / duration, 1);
-                obj.innerHTML = Math.floor(progress * (end - start) + start);
-                if (progress < 1) {
-                    window.requestAnimationFrame(step);
-                } else {
-                    obj.innerHTML = end;
-                }
-            };
-            window.requestAnimationFrame(step);
-        }
-    </script>
-</body>
-
-</html>
+        };
+        window.requestAnimationFrame(step);
+    }
+</script>
+{% endblock %}
