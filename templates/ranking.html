@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Ranking</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* 모바일에서 테이블 스크롤 시 스크롤바 디자인 */
+        .scrollbar-hide::-webkit-scrollbar {
+            height: 8px;
+        }
+
+        .scrollbar-hide::-webkit-scrollbar-track {
+            background: #2d3748;
+        }
+
+        .scrollbar-hide::-webkit-scrollbar-thumb {
+            background: #4a5568;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+
+<body class="bg-gray-900 text-white min-h-screen p-6 md:p-10">
+    <div class="max-w-7xl mx-auto">
+        <!-- 헤더 -->
+        <div class="flex flex-col md:flex-row justify-between items-end mb-6 gap-4">
+            <div>
+                <h1
+                    class="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-red-500">
+                    🏆 애니메이션 랭킹
+                </h1>
+                <p class="text-gray-400 text-sm mt-1">항목별 점수를 클릭하여 정렬할 수 있습니다.</p>
+            </div>
+            <a href="/" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded text-sm transition">← 홈으로</a>
+        </div>
+
+        <div class="bg-gray-800 p-4 rounded-xl shadow-lg border border-gray-700 mb-8 relative overflow-hidden">
+            <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500">
+            </div>
+            <h2 class="text-gray-400 text-sm font-bold uppercase tracking-widest mb-2">
+                📊 Score Distribution: <span class="text-white">{{ chart_data.category }}</span>
+            </h2>
+            <div class="h-64 w-full">
+                <canvas id="distributionChart"></canvas>
+            </div>
+        </div>
+
+        <!-- 정렬 버튼 그룹 (모바일 호환) -->
+        <div class="mb-6 overflow-x-auto pb-2">
+            <div class="flex gap-2 min-w-max">
+                <a href="/ranking?sort_by=total"
+                    class="px-4 py-2 rounded font-bold transition {{ 'bg-yellow-600 text-white ring-2 ring-yellow-400' if sort_by=='total' else 'bg-gray-800 text-gray-400 hover:bg-gray-700' }}">
+                    종합
+                </a>
+                <a href="/ranking?sort_by=story"
+                    class="px-4 py-2 rounded font-bold transition {{ 'bg-blue-600 text-white ring-2 ring-blue-400' if sort_by=='story' else 'bg-gray-800 text-gray-400 hover:bg-gray-700' }}">
+                    스토리
+                </a>
+                <a href="/ranking?sort_by=visual"
+                    class="px-4 py-2 rounded font-bold transition {{ 'bg-purple-600 text-white ring-2 ring-purple-400' if sort_by=='visual' else 'bg-gray-800 text-gray-400 hover:bg-gray-700' }}">
+                    작화
+                </a>
+                <a href="/ranking?sort_by=ost"
+                    class="px-4 py-2 rounded font-bold transition {{ 'bg-pink-600 text-white ring-2 ring-pink-400' if sort_by=='ost' else 'bg-gray-800 text-gray-400 hover:bg-gray-700' }}">
+                    OST
+                </a>
+                <a href="/ranking?sort_by=voice"
+                    class="px-4 py-2 rounded font-bold transition {{ 'bg-green-600 text-white ring-2 ring-green-400' if sort_by=='voice' else 'bg-gray-800 text-gray-400 hover:bg-gray-700' }}">
+                    성우
+                </a>
+                <a href="/ranking?sort_by=char"
+                    class="px-4 py-2 rounded font-bold transition {{ 'bg-indigo-600 text-white ring-2 ring-indigo-400' if sort_by=='char' else 'bg-gray-800 text-gray-400 hover:bg-gray-700' }}">
+                    캐릭터
+                </a>
+                <a href="/ranking?sort_by=fun"
+                    class="px-4 py-2 rounded font-bold transition {{ 'bg-red-600 text-white ring-2 ring-red-400' if sort_by=='fun' else 'bg-gray-800 text-gray-400 hover:bg-gray-700' }}">
+                    재미
+                </a>
+            </div>
+        </div>
+
+        <!-- 랭킹 테이블 -->
+        <div class="bg-gray-800 rounded-lg shadow-xl border border-gray-700 overflow-hidden">
+            <div class="overflow-x-auto scrollbar-hide">
+                <table class="w-full text-left border-collapse whitespace-nowrap">
+                    <thead class="bg-gray-750 text-gray-300 border-b border-gray-600">
+                        <tr>
+                            <th class="p-4 w-16 text-center">#</th>
+                            <th class="p-4 min-w-[200px]">제목</th>
+                            <th class="p-4 text-center text-yellow-400 font-bold bg-gray-700/50 cursor-pointer"
+                                onclick="location.href='/ranking?sort_by=total'">종합</th>
+                            <th class="p-4 text-center hover:text-blue-400 cursor-pointer"
+                                onclick="location.href='/ranking?sort_by=story'">스토리</th>
+                            <th class="p-4 text-center hover:text-purple-400 cursor-pointer"
+                                onclick="location.href='/ranking?sort_by=visual'">작화</th>
+                            <th class="p-4 text-center hover:text-pink-400 cursor-pointer"
+                                onclick="location.href='/ranking?sort_by=ost'">OST</th>
+                            <th class="p-4 text-center hover:text-green-400 cursor-pointer"
+                                onclick="location.href='/ranking?sort_by=voice'">성우</th>
+                            <th class="p-4 text-center hover:text-indigo-400 cursor-pointer"
+                                onclick="location.href='/ranking?sort_by=char'">캐릭터</th>
+                            <th class="p-4 text-center hover:text-red-400 cursor-pointer"
+                                onclick="location.href='/ranking?sort_by=fun'">재미</th>
+                            <th class="p-4 text-center text-gray-500 text-xs">경기수</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-700">
+                        {% for ani in animes %}
+                        <tr class="hover:bg-gray-700/50 transition duration-150 group">
+                            <!-- 순위 -->
+                            <td class="p-4 text-center font-mono text-gray-400">{{ loop.index }}</td>
+
+                            <!-- 제목 -->
+                            <td class="p-4 font-bold text-white group-hover:text-blue-300 transition">
+                                {{ ani.name }}
+                            </td>
+
+                            <!-- 종합 점수 (강조) -->
+                            <td class="p-4 text-center font-mono font-bold text-yellow-400 text-lg bg-gray-700/30">
+                                {{ ani.total }}
+                            </td>
+
+                            <!-- 세부 점수들 -->
+                            <td
+                                class="p-4 text-center font-mono text-gray-300 {{ 'text-blue-400 font-bold' if sort_by=='story' else '' }}">
+                                {{ ani.story }}
+                            </td>
+                            <td
+                                class="p-4 text-center font-mono text-gray-300 {{ 'text-purple-400 font-bold' if sort_by=='visual' else '' }}">
+                                {{ ani.visual }}
+                            </td>
+                            <td
+                                class="p-4 text-center font-mono text-gray-300 {{ 'text-pink-400 font-bold' if sort_by=='ost' else '' }}">
+                                {{ ani.ost }}
+                            </td>
+                            <td
+                                class="p-4 text-center font-mono text-gray-300 {{ 'text-green-400 font-bold' if sort_by=='voice' else '' }}">
+                                {{ ani.voice }}
+                            </td>
+                            <td
+                                class="p-4 text-center font-mono text-gray-300 {{ 'text-indigo-400 font-bold' if sort_by=='char' else '' }}">
+                                {{ ani.char }}
+                            </td>
+                            <td
+                                class="p-4 text-center font-mono text-gray-300 {{ 'text-red-400 font-bold' if sort_by=='fun' else '' }}">
+                                {{ ani.fun }}
+                            </td>
+
+                            <!-- 경기 수 -->
+                            <td class="p-4 text-center font-mono text-gray-600 text-xs">
+                                {{ ani.matches }}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <script>
+        // Python에서 넘겨준 데이터 받기
+        const labels = {{ chart_data.labels | safe }};
+        const counts = {{ chart_data.counts | safe }};
+        const categoryName = "{{ chart_data.category }}";
+
+        // 색상 테마 결정 (카테고리별 다른 색상)
+        let colorTheme = '147, 51, 234'; // 기본 Purple
+        if (categoryName === 'STORY') colorTheme = '37, 99, 235'; // Blue
+        if (categoryName === 'VISUAL') colorTheme = '147, 51, 234'; // Purple
+        if (categoryName === 'OST') colorTheme = '219, 39, 119'; // Pink
+        if (categoryName === 'VOICE') colorTheme = '22, 163, 74'; // Green
+        if (categoryName === 'CHAR') colorTheme = '79, 70, 229'; // Indigo
+        if (categoryName === 'FUN') colorTheme = '220, 38, 38'; // Red
+        if (categoryName === '종합 점수') colorTheme = '234, 179, 8'; // Yellow
+
+        const ctx = document.getElementById('distributionChart').getContext('2d');
+
+        // 그라데이션 효과 생성
+        const gradient = ctx.createLinearGradient(0, 0, 0, 400);
+        gradient.addColorStop(0, `rgba(${colorTheme}, 0.5)`); // 위쪽 (진함)
+        gradient.addColorStop(1, `rgba(${colorTheme}, 0.0)`); // 아래쪽 (투명)
+
+        new Chart(ctx, {
+            type: 'line', // 선 그래프 (영역 채움)
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: '애니메이션 수',
+                    data: counts,
+                    borderColor: `rgba(${colorTheme}, 1)`,
+                    backgroundColor: gradient,
+                    borderWidth: 3,
+                    pointBackgroundColor: '#1f2937', // 배경색과 맞춤
+                    pointBorderColor: `rgba(${colorTheme}, 1)`,
+                    pointHoverBackgroundColor: '#fff',
+                    pointHoverBorderColor: `rgba(${colorTheme}, 1)`,
+                    fill: true, // 아래 영역 채우기
+                    tension: 0.4 // 곡선 부드럽게 (베지어 곡선)
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false }, // 범례 숨김
+                    tooltip: {
+                        mode: 'index',
+                        intersect: false,
+                        backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                        titleColor: '#fff',
+                        bodyColor: '#ddd',
+                        borderColor: '#555',
+                        borderWidth: 1
+                    }
+                },
+                scales: {
+                    x: {
+                        grid: { display: false, color: '#374151' },
+                        ticks: { color: '#9ca3af' }
+                    },
+                    y: {
+                        beginAtZero: true,
+                        grid: { color: '#374151', borderDash: [5, 5] },
+                        ticks: { color: '#9ca3af', precision: 0 }
+                    }
+                },
+                interaction: {
+                    mode: 'nearest',
+                    axis: 'x',
+                    intersect: false
+                }
+            }
+        });
+    </script>
+</body>
+
+</html>

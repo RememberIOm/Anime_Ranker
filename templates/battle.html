@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Battle!</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* 애니메이션용 CSS */
+        @keyframes floatUp {
+            0% {
+                transform: translateY(0);
+                opacity: 1;
+            }
+
+            100% {
+                transform: translateY(-40px);
+                opacity: 0;
+            }
+        }
+
+        .float-anim {
+            animation: floatUp 1.5s ease-out forwards;
+        }
+
+        .scale-in {
+            animation: scaleIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        }
+
+        @keyframes scaleIn {
+            from {
+                transform: scale(0.8);
+                opacity: 0;
+            }
+
+            to {
+                transform: scale(1);
+                opacity: 1;
+            }
+        }
+    </style>
+</head>
+
+<body class="bg-gray-900 text-white min-h-screen flex flex-col items-center justify-center relative overflow-hidden">
+
+    <!-- 집중 모드 알림 -->
+    {% if focus_mode %}
+    <div class="absolute top-4 left-0 w-full text-center z-10">
+        <div class="inline-block bg-blue-600 px-4 py-1 rounded-full text-sm font-bold shadow-lg animate-pulse">
+            🎯 '{{ anime1.name }}' 집중 평가 중
+        </div>
+        <div class="mt-1">
+            <a href="/manage" class="text-xs text-gray-400 underline hover:text-white">나가기</a>
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="mb-8 text-center z-10">
+        <span class="text-sm text-gray-400 uppercase tracking-widest">Current Match Category</span>
+        <h2 class="text-4xl font-extrabold text-yellow-400 mt-2">{{ category_name }}</h2>
+        <p class="text-gray-300 mt-2">더 뛰어난 쪽을 선택하세요!</p>
+    </div>
+
+    <!-- 메인 대결 영역 -->
+    <div class="w-full max-w-5xl flex flex-col md:flex-row justify-between items-center gap-6 px-4 z-10">
+
+        <!-- Anime 1 -->
+        <div id="card-1" onclick="submitVote('1')"
+            class="relative w-full md:w-1/2 bg-gray-800 hover:bg-blue-900 p-8 md:p-12 rounded-2xl border-2 border-gray-700 hover:border-blue-500 transition-all transform hover:-translate-y-2 cursor-pointer group shadow-2xl">
+            <h3 class="text-2xl md:text-4xl font-bold group-hover:text-blue-400 text-center break-words leading-tight">
+                {{ anime1.name
+                }}</h3>
+            <div class="mt-4 text-center text-gray-500 font-mono">Rating: {{ anime1['rating_' + category_key]|round|int
+                }}</div>
+            <!-- 승리 시 효과용 -->
+            <div id="result-overlay-1"
+                class="absolute inset-0 bg-blue-600/20 hidden rounded-2xl border-4 border-blue-500"></div>
+        </div>
+
+        <div class="flex flex-col gap-4 items-center shrink-0">
+            <div class="text-3xl font-bold text-gray-600 italic">VS</div>
+            <button onclick="submitVote('draw')"
+                class="px-6 py-2 bg-gray-700 hover:bg-gray-600 rounded-full text-sm text-gray-300 border border-gray-600 transition">
+                무승부
+            </button>
+        </div>
+
+        <!-- Anime 2 -->
+        <div id="card-2" onclick="submitVote('2')"
+            class="relative w-full md:w-1/2 bg-gray-800 hover:bg-red-900 p-8 md:p-12 rounded-2xl border-2 border-gray-700 hover:border-red-500 transition-all transform hover:-translate-y-2 cursor-pointer group shadow-2xl">
+            <h3 class="text-2xl md:text-4xl font-bold group-hover:text-red-400 text-center break-words leading-tight">{{
+                anime2.name }}
+            </h3>
+            <div class="mt-4 text-center text-gray-500 font-mono">Rating: {{ anime2['rating_' + category_key]|round|int
+                }}</div>
+            <!-- 승리 시 효과용 -->
+            <div id="result-overlay-2"
+                class="absolute inset-0 bg-red-600/20 hidden rounded-2xl border-4 border-red-500"></div>
+        </div>
+    </div>
+
+    <!-- 결과 애니메이션 모달 (평소엔 숨김) -->
+    <div id="result-modal"
+        class="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 hidden opacity-0 transition-opacity duration-300">
+        <div class="bg-gray-900 p-8 rounded-2xl border border-gray-600 shadow-2xl text-center max-w-lg w-full scale-in">
+            <h3 class="text-2xl font-bold text-white mb-8">ELO Rating Updated!</h3>
+
+            <div class="flex justify-between items-center px-4">
+                <!-- Anime 1 Result -->
+                <div class="flex flex-col items-center">
+                    <span class="text-gray-400 text-sm mb-1 truncate w-24">{{ anime1.name }}</span>
+                    <span id="score-1" class="text-4xl font-mono font-bold text-white">1200</span>
+                    <span id="diff-1"
+                        class="text-lg font-bold mt-2 opacity-0 transform translate-y-4 transition-all duration-500">+0</span>
+                </div>
+
+                <div class="text-gray-600">➜</div>
+
+                <!-- Anime 2 Result -->
+                <div class="flex flex-col items-center">
+                    <span class="text-gray-400 text-sm mb-1 truncate w-24">{{ anime2.name }}</span>
+                    <span id="score-2" class="text-4xl font-mono font-bold text-white">1200</span>
+                    <span id="diff-2"
+                        class="text-lg font-bold mt-2 opacity-0 transform translate-y-4 transition-all duration-500">-0</span>
+                </div>
+            </div>
+
+            <div class="mt-8">
+                <div class="h-1 w-full bg-gray-700 rounded-full overflow-hidden">
+                    <div id="progress-bar" class="h-full bg-yellow-400 w-0 transition-all duration-[1500ms] ease-out">
+                    </div>
+                </div>
+                <p class="text-xs text-gray-500 mt-2">다음 대결 준비 중...</p>
+            </div>
+        </div>
+    </div>
+
+    <a href="/" class="mt-12 text-gray-500 hover:text-white underline z-10">메인으로 돌아가기</a>
+
+    <!-- 데이터 전송용 숨겨진 폼 데이터 -->
+    <script>
+        const anime1Id = "{{ anime1.id }}";
+        const anime2Id = "{{ anime2.id }}";
+        const categoryKey = "{{ category_key }}";
+        // Jinja2 템플릿 변수를 JS 문자열로 안전하게 변환
+        const redirectTo = "{% if focus_mode %}/battle/focus/{{ focus_id }}{% endif %}";
+
+        async function submitVote(winner) {
+            // 1. UI 즉각 반응 (클릭한 카드 강조)
+            if (winner === '1') document.getElementById('result-overlay-1').classList.remove('hidden');
+            if (winner === '2') document.getElementById('result-overlay-2').classList.remove('hidden');
+
+            // 2. 서버로 AJAX 요청 전송
+            const formData = new FormData();
+            formData.append('anime1_id', anime1Id);
+            formData.append('anime2_id', anime2Id);
+            formData.append('category', categoryKey);
+            formData.append('winner', winner);
+            if (redirectTo) formData.append('redirect_to', redirectTo);
+
+            try {
+                const response = await fetch('/battle/vote', {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest' // AJAX 요청임을 표시
+                    }
+                });
+
+                const data = await response.json();
+                showResultAnimation(data);
+
+            } catch (error) {
+                console.error('Error:', error);
+                location.reload(); // 에러나면 그냥 새로고침
+            }
+        }
+
+        function showResultAnimation(data) {
+            const modal = document.getElementById('result-modal');
+            const score1El = document.getElementById('score-1');
+            const diff1El = document.getElementById('diff-1');
+            const score2El = document.getElementById('score-2');
+            const diff2El = document.getElementById('diff-2');
+            const progressBar = document.getElementById('progress-bar');
+
+            // 1. 모달 띄우기
+            modal.classList.remove('hidden');
+            // 약간의 딜레이 후 투명도 조절로 페이드인 효과
+            setTimeout(() => { modal.classList.remove('opacity-0'); }, 10);
+
+            // 2. 초기 숫자 세팅 (이전 점수)
+            score1El.innerText = data.old_r1;
+            score2El.innerText = data.old_r2;
+
+            // 3. 증가/감소 텍스트 세팅 및 색상 결정
+            setDiffStyle(diff1El, data.diff_r1);
+            setDiffStyle(diff2El, data.diff_r2);
+
+            // 4. 숫자 카운팅 애니메이션 (0.5초 대기 후 시작)
+            setTimeout(() => {
+                animateValue(score1El, data.old_r1, data.new_r1, 1000);
+                animateValue(score2El, data.old_r2, data.new_r2, 1000);
+
+                // 증감 표시 등장
+                diff1El.classList.remove('opacity-0', 'translate-y-4');
+                diff2El.classList.remove('opacity-0', 'translate-y-4');
+
+                // 진행바 참
+                progressBar.style.width = "100%";
+            }, 300);
+
+            // 5. 완료 후 다음 페이지로 이동 (총 2초 후)
+            setTimeout(() => {
+                window.location.href = data.next_url;
+            }, 1800);
+        }
+
+        function setDiffStyle(element, diff) {
+            if (diff > 0) {
+                element.innerText = "+" + diff;
+                element.className = "text-xl font-bold mt-2 text-green-400 transition-all duration-500 float-anim";
+            } else if (diff < 0) {
+                element.innerText = diff;
+                element.className = "text-xl font-bold mt-2 text-red-500 transition-all duration-500 float-anim";
+            } else {
+                element.innerText = "-";
+                element.className = "text-xl font-bold mt-2 text-gray-500 transition-all duration-500";
+            }
+        }
+
+        // 숫자 굴러가는 효과 함수
+        function animateValue(obj, start, end, duration) {
+            let startTimestamp = null;
+            const step = (timestamp) => {
+                if (!startTimestamp) startTimestamp = timestamp;
+                const progress = Math.min((timestamp - startTimestamp) / duration, 1);
+                obj.innerHTML = Math.floor(progress * (end - start) + start);
+                if (progress < 1) {
+                    window.requestAnimationFrame(step);
+                } else {
+                    obj.innerHTML = end;
+                }
+            };
+            window.requestAnimationFrame(step);
+        }
+    </script>
+</body>
+
+</html>

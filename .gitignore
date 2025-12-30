@@ -1,0 +1,6 @@
+venv/
+__pycache__/
+*.db
+*.sqlite
+*.csv
+.DS_Store

@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <title>애니메이션 관리</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        // 삭제 전 확인
+        function confirmDelete(name) {
+            return confirm(`정말로 '${name}'을(를) 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.`);
+        }
+
+        // 수정 모드 토글 함수
+        function toggleEdit(id) {
+            const viewRow = document.getElementById(`view-row-${id}`);
+            const editRow = document.getElementById(`edit-row-${id}`);
+
+            // 클래스 제어로 보이고 숨기기 (Tailwind 'hidden' 클래스 활용)
+            if (viewRow.classList.contains('hidden')) {
+                viewRow.classList.remove('hidden');
+                editRow.classList.add('hidden');
+            } else {
+                viewRow.classList.add('hidden');
+                editRow.classList.remove('hidden');
+                // 입력창에 포커스 주기
+                document.getElementById(`input-name-${id}`).focus();
+            }
+        }
+    </script>
+</head>
+
+<body class="bg-gray-900 text-white min-h-screen p-6 md:p-10">
+    <div class="max-w-4xl mx-auto">
+        <div class="flex justify-between items-center mb-8">
+            <h1 class="text-3xl font-bold">⚙️ 애니메이션 관리</h1>
+            <a href="/" class="text-blue-400 hover:underline">← 홈으로</a>
+        </div>
+
+        <!-- 추가 폼 -->
+        <div class="bg-gray-800 p-6 rounded-lg shadow-lg mb-8 border border-gray-700">
+            <h2 class="text-xl font-bold mb-4 text-green-400">새 애니메이션 추가</h2>
+            <form action="/manage/add" method="post" class="flex gap-4">
+                <input type="text" name="name" placeholder="애니메이션 이름 입력" required
+                    class="flex-1 p-3 rounded bg-gray-700 border border-gray-600 focus:outline-none focus:border-green-500 text-white">
+                <button type="submit"
+                    class="bg-green-600 hover:bg-green-700 px-6 py-3 rounded font-bold transition whitespace-nowrap">
+                    추가
+                </button>
+            </form>
+            <p class="text-gray-500 text-sm mt-2">* 초기 점수는 1200점으로 설정됩니다.</p>
+        </div>
+
+        <!-- 목록 -->
+        <div class="bg-gray-800 rounded-lg overflow-hidden shadow-lg border border-gray-700">
+            <div class="p-4 bg-gray-700 font-bold border-b border-gray-600 flex justify-between">
+                <span>등록된 애니메이션 목록 ({{ animes|length }}개)</span>
+            </div>
+
+            <ul class="divide-y divide-gray-700 max-h-[600px] overflow-y-auto">
+                {% for ani in animes %}
+                <li class="p-4 hover:bg-gray-750 transition border-b border-gray-700 last:border-0">
+
+                    <!-- 1. 보기 모드 -->
+                    <div id="view-row-{{ ani.id }}"
+                        class="flex flex-col sm:flex-row sm:justify-between sm:items-center w-full gap-2">
+
+                        <!-- [왼쪽] 이름 영역 (뱃지 제거됨) -->
+                        <div class="flex items-center overflow-hidden mr-2">
+                            <span class="font-medium text-lg truncate text-white" title="{{ ani.name }}">
+                                {{ ani.name }}
+                            </span>
+                        </div>
+
+                        <!-- [오른쪽] 버튼 영역 (뱃지 추가됨) -->
+                        <div class="flex items-center gap-2 shrink-0 self-end sm:self-auto">
+
+                            <!-- [이동됨] 평가 횟수 뱃지 (수정 버튼 바로 왼쪽) -->
+                            <span
+                                class="shrink-0 text-xs font-mono px-2 py-1.5 rounded border mr-1
+                {{ 'bg-yellow-900/30 text-yellow-400 border-yellow-600' if ani.matches_played < 10 else 'bg-gray-800 text-gray-500 border-gray-700' }}">
+                                {% if ani.matches_played == 0 %}
+                                New
+                                {% else %}
+                                {{ ani.matches_played }}회
+                                {% endif %}
+                            </span>
+
+                            <!-- 수정 버튼 -->
+                            <button onclick="toggleEdit('{{ ani.id }}')"
+                                class="text-gray-400 hover:text-white px-3 py-1.5 rounded bg-gray-700 hover:bg-gray-600 transition text-sm flex items-center gap-1">
+                                <span>✏️</span> <span class="hidden md:inline">수정</span>
+                            </button>
+
+                            <!-- 집중 평가 -->
+                            <a href="/battle/focus/{{ ani.id }}"
+                                class="px-3 py-1.5 bg-blue-900/30 hover:bg-blue-600 text-blue-300 hover:text-white rounded border border-blue-800 hover:border-blue-500 transition text-sm flex items-center gap-1">
+                                <span>🎯</span> <span class="hidden md:inline">집중 평가</span>
+                            </a>
+
+                            <!-- 삭제 -->
+                            <form action="/manage/delete" method="post"
+                                onsubmit="return confirmDelete('{{ ani.name }}')" class="inline">
+                                <input type="hidden" name="anime_id" value="{{ ani.id }}">
+                                <button type="submit"
+                                    class="px-3 py-1.5 bg-red-900/30 hover:bg-red-600 text-red-300 hover:text-white rounded border border-red-800 hover:border-red-500 transition text-sm">
+                                    삭제
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+
+                    <!-- 2. 수정 모드 (기존과 동일) -->
+                    <form id="edit-row-{{ ani.id }}" action="/manage/edit" method="post"
+                        class="hidden flex items-center gap-2 w-full mt-2 sm:mt-0">
+                        <input type="hidden" name="anime_id" value="{{ ani.id }}">
+                        <input type="text" id="input-name-{{ ani.id }}" name="new_name" value="{{ ani.name }}" required
+                            class="flex-1 bg-gray-900 text-white px-3 py-2 rounded border border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500">
+                        <button type="submit"
+                            class="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded text-white font-bold text-sm whitespace-nowrap">저장</button>
+                        <button type="button" onclick="toggleEdit('{{ ani.id }}')"
+                            class="px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded text-gray-200 text-sm whitespace-nowrap">취소</button>
+                    </form>
+
+                </li>
+                {% else %}
+                <li class="p-8 text-center text-gray-500">등록된 애니메이션이 없습니다.</li>
+                {% endfor %}
+            </ul>
+        </div>
+    </div>
+</body>
+
+</html>
