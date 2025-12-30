@@ -5,6 +5,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, delete, update
 from sqlalchemy.sql.expression import func as sql_func
+import os
 import pandas as pd
 import random
 
@@ -15,7 +16,6 @@ from rating import update_elo
 app = FastAPI()
 templates = Jinja2Templates(directory="templates")
 
-# 앱 시작 시 DB 테이블 생성 및 CSV 데이터 로드 (데이터가 없을 경우)
 @app.on_event("startup")
 async def startup():
     async with engine.begin() as conn:
@@ -26,30 +26,29 @@ async def startup():
         count = result.scalar()
         
         if count == 0:
-            print("CSV 데이터를 가져옵니다...")
-            df = pd.read_csv("animation.csv")
-            # 기존 데이터를 활용해 초기 Elo 점수를 약간 보정할 수도 있지만,
-            # 공정한 새 평가를 위해 모두 1200점으로 시작하거나, 
-            # 기존 총점 * 100 + 400 정도로 변환해서 넣을 수 있습니다.
-            # 여기서는 공정하게 1200점 시작으로 가정하되, 이름만 가져옵니다.
-            for _, row in df.iterrows():
-                # 기존 점수를 약간 반영하여 초기값 설정 (예: 9.8점 -> 1580, 5점 -> 1100)
-                # 이렇게 하면 처음부터 너무 쌩뚱맞은 매칭을 줄일 수 있음
-                base_score = 1200 + (float(row['총점']) - 7.0) * 100 
-                
-                anime = Anime(
-                    name=row['이름'],
-                    original_rank=row['순위'],
-                    rating_story=base_score,
-                    rating_visual=base_score,
-                    rating_ost=base_score,
-                    rating_voice=base_score,
-                    rating_char=base_score,
-                    rating_fun=base_score
-                )
-                session.add(anime)
-            await session.commit()
-            print("데이터 로드 완료!")
+            print("DB가 비어 있습니다.")
+            # CSV 파일이 존재할 때만 읽기 시도
+            if os.path.exists("animation.csv"):
+                print("CSV 데이터를 가져옵니다...")
+                df = pd.read_csv("animation.csv")
+                for _, row in df.iterrows():
+                    base_score = 1200 + (float(row['총점']) - 7.0) * 100 
+                    
+                    anime = Anime(
+                        name=row['이름'],
+                        original_rank=row['순위'],
+                        rating_story=base_score,
+                        rating_visual=base_score,
+                        rating_ost=base_score,
+                        rating_voice=base_score,
+                        rating_char=base_score,
+                        rating_fun=base_score
+                    )
+                    session.add(anime)
+                await session.commit()
+                print("데이터 로드 완료!")
+            else:
+                print("주의: animation.csv 파일을 찾을 수 없습니다. 빈 DB로 시작합니다.")
 
 @app.get("/", response_class=HTMLResponse)
 async def read_root(request: Request):
