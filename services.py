@@ -3,7 +3,7 @@ import math
 import random
 import os
 import pandas as pd
-from typing import Tuple, Dict, Optional
+from typing import Tuple, Dict, Optional, Any
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update, and_
 from sqlalchemy.sql.expression import func as sql_func
@@ -37,26 +37,21 @@ def get_match_probabilities(rating_a: float, rating_b: float) -> Dict[str, float
     """
     UI 표시용: 두 점수 차이에 기반하여 승리(A), 무승부, 패배(B승리) 확률을 계산합니다.
     """
-    # 1. Elo Expected Score (승리 기댓값)
     expected_a = calculate_expected_score(rating_a, rating_b)
-
-    # 2. 무승부 확률 추정 (Gaussian Function)
-    # 점수 차(delta)가 클수록 0에 수렴하며, SCALE 값이 작을수록 더 빨리 0이 됨
     delta = abs(rating_a - rating_b)
+
+    # 무승부 확률 추정
     p_draw = settings.ELO_DRAW_MAX * math.exp(-((delta / settings.ELO_DRAW_SCALE) ** 2))
 
-    # 3. 승리/패배 확률 분리
-    # E_a = P(Win_A) + 0.5 * P(Draw)
-    # Therefore: P(Win_A) = E_a - 0.5 * P(Draw)
+    # 승리/패배 확률 분리
     p_win_a = max(0.0, expected_a - 0.5 * p_draw)
 
-    # P(Win_B) = (1 - E_a) - 0.5 * P(Draw)
     expected_b = 1.0 - expected_a
     p_win_b = max(0.0, expected_b - 0.5 * p_draw)
 
-    # 4. 정규화 (합이 정확히 100%가 되도록 보정)
+    # 정규화
     total_prob = p_win_a + p_draw + p_win_b
-    if total_prob == 0:  # 방어 코드
+    if total_prob == 0:
         return {"win_a": 0.0, "draw": 100.0, "win_b": 0.0}
 
     return {
@@ -91,6 +86,37 @@ def calculate_elo_update(
 # --- Database Services ---
 
 
+async def get_anime_rank_info(
+    db: AsyncSession, category: str, score: float
+) -> Dict[str, Any]:
+    """
+    특정 카테고리 점수를 기준으로 해당 점수의 등수와 상위 퍼센트를 계산합니다.
+    """
+    # 전체 개수
+    total_query = select(sql_func.count(Anime.id))
+    total_result = await db.execute(total_query)
+    total_count = total_result.scalar() or 1  # 0 나누기 방지
+
+    # 나보다 점수가 높은 항목의 개수 (Standard Competition Ranking: 1 2 2 4...)
+    # getattr(Anime, f"rating_{category}") 대신 동적 컬럼 매핑이 필요하나,
+    # SQLAlchemy Core 레벨에서는 리터럴 컬럼명 사용이 복잡하므로 로직으로 처리.
+    # 여기서는 단순화를 위해 모든 항목을 가져오는 대신 SQL count를 사용합니다.
+
+    target_col = getattr(Anime, f"rating_{category}")
+    rank_query = select(sql_func.count(Anime.id)).where(target_col > score)
+    rank_result = await db.execute(rank_query)
+    higher_rank_count = rank_result.scalar()
+
+    current_rank = higher_rank_count + 1
+    percentile = (current_rank / total_count) * 100.0
+
+    return {
+        "rank": current_rank,
+        "total": total_count,
+        "top_percent": round(percentile, 1),
+    }
+
+
 async def load_initial_data(db: AsyncSession) -> None:
     """DB 초기화: 데이터가 없을 시 CSV 로드"""
     result = await db.execute(select(sql_func.count(Anime.id)))
@@ -101,7 +127,6 @@ async def load_initial_data(db: AsyncSession) -> None:
         try:
             df = pd.read_csv("animation.csv")
             for _, row in df.iterrows():
-                # 초기 점수 변환 로직 (기존 7.0점 기준 1200점)
                 base_score = 1200.0 + (float(row.get("총점", 7.0)) - 7.0) * 100.0
                 anime = Anime(
                     name=row["이름"],
@@ -121,10 +146,7 @@ async def load_initial_data(db: AsyncSession) -> None:
 
 
 async def normalize_scores_task(db_factory) -> None:
-    """
-    [백그라운드 작업] 점수 인플레이션/디플레이션 방지 보정 (Mean Reversion)
-    전체 평균을 1200으로 강제 조정하여 점수가 무한히 팽창하는 것을 막습니다.
-    """
+    """[백그라운드 작업] 점수 인플레이션 방지 (Mean Reversion)"""
     async with db_factory() as db:
         categories = ["story", "visual", "ost", "voice", "char", "fun"]
         is_modified = False
@@ -141,10 +163,8 @@ async def normalize_scores_task(db_factory) -> None:
             current_avg = total_val / len(animes)
             diff = current_avg - 1200.0
 
-            # 평균 편차가 1.0 이상일 때만 보정 수행
             if abs(diff) > 1.0:
                 is_modified = True
-                # SQL Bulk Update가 ORM 객체 순회보다 효율적
                 await db.execute(
                     update(Anime).values({attr_name: getattr(Anime, attr_name) - diff})
                 )
@@ -156,17 +176,12 @@ async def normalize_scores_task(db_factory) -> None:
 async def get_match_pair(
     db: AsyncSession, focus_id: Optional[int] = None
 ) -> Tuple[Optional[Anime], Optional[Anime]]:
-    """
-    대결 상대를 선정합니다 (Smart Match + Random).
-    점수 차가 적절한(MATCH_SCORE_RANGE) 상대를 우선 매칭하여 데이터 품질을 높입니다.
-    """
-    # 1. 첫 번째 애니메이션 선택
+    """대결 상대를 선정합니다 (Smart Match + Random)."""
     if focus_id:
         anime1 = await db.get(Anime, focus_id)
         if not anime1:
             return None, None
     else:
-        # 완전 랜덤 선택 (Bias 방지)
         query = select(Anime).order_by(sql_func.random()).limit(1)
         result = await db.execute(query)
         anime1 = result.scalar()
@@ -174,7 +189,6 @@ async def get_match_pair(
     if not anime1:
         return None, None
 
-    # 2. 두 번째 애니메이션 선택 (Smart Match 로직)
     use_smart_match = random.random() < settings.MATCH_SMART_RATE
     anime2 = None
 
@@ -183,7 +197,6 @@ async def get_match_pair(
         min_score = target_score - settings.MATCH_SCORE_RANGE
         max_score = target_score + settings.MATCH_SCORE_RANGE
 
-        # 범위 내 랜덤 선택
         query = (
             select(Anime)
             .where(
@@ -199,7 +212,6 @@ async def get_match_pair(
         result = await db.execute(query)
         anime2 = result.scalar()
 
-    # Smart Match 실패 시 (범위 내 상대 없음) 혹은 Random Match 모드일 때
     if not anime2:
         query = (
             select(Anime)

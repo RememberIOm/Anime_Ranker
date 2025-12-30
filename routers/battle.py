@@ -14,6 +14,7 @@ from services import (
     calculate_elo_update,
     normalize_scores_task,
     get_match_probabilities,
+    get_anime_rank_info,
 )
 
 router = APIRouter(prefix="/battle", tags=["battle"])
@@ -50,10 +51,14 @@ async def get_battle(request: Request, db: SessionDep):
     selected_category = random.choice(CATEGORIES)
     category_key = selected_category[0]
 
-    # 확률 계산 (현재 카테고리 점수 기준)
+    # 점수 가져오기
     r1 = getattr(anime1, f"rating_{category_key}")
     r2 = getattr(anime2, f"rating_{category_key}")
+
+    # 확률 및 등수 정보 계산
     probs = get_match_probabilities(r1, r2)
+    rank1 = await get_anime_rank_info(db, category_key, r1)
+    rank2 = await get_anime_rank_info(db, category_key, r2)
 
     return templates.TemplateResponse(
         "battle.html",
@@ -63,7 +68,9 @@ async def get_battle(request: Request, db: SessionDep):
             "anime2": anime2,
             "category_key": category_key,
             "category_name": selected_category[1],
-            "probs": probs,  # 확률 데이터 전달
+            "probs": probs,
+            "rank1": rank1,
+            "rank2": rank2,
         },
     )
 
@@ -80,10 +87,12 @@ async def focus_battle(anime_id: int, request: Request, db: SessionDep):
     selected_category = random.choice(CATEGORIES)
     category_key = selected_category[0]
 
-    # 확률 계산
     r1 = getattr(anime1, f"rating_{category_key}")
     r2 = getattr(anime2, f"rating_{category_key}")
+
     probs = get_match_probabilities(r1, r2)
+    rank1 = await get_anime_rank_info(db, category_key, r1)
+    rank2 = await get_anime_rank_info(db, category_key, r2)
 
     return templates.TemplateResponse(
         "battle.html",
@@ -96,6 +105,8 @@ async def focus_battle(anime_id: int, request: Request, db: SessionDep):
             "focus_mode": True,
             "focus_id": anime_id,
             "probs": probs,
+            "rank1": rank1,
+            "rank2": rank2,
         },
     )
 
@@ -121,6 +132,11 @@ async def vote(
     old_r1 = getattr(a1, attr_name)
     old_r2 = getattr(a2, attr_name)
 
+    # 1. 변경 전 등수 계산
+    info1_old = await get_anime_rank_info(db, category, old_r1)
+    info2_old = await get_anime_rank_info(db, category, old_r2)
+
+    # 2. 점수 업데이트 계산
     if winner == "1":
         actual_score = 1.0
     elif winner == "2":
@@ -139,6 +155,14 @@ async def vote(
 
     await db.commit()
 
+    # 3. 변경 후 등수 계산 (주의: DB에 반영된 새 점수를 기준으로 재조회 필요)
+    # 다만 여기서는 count 쿼리이므로, 다른 애니메이션 점수는 그대로라고 가정하고
+    # a1, a2의 점수만 변동된 상태에서 쿼리를 날립니다.
+    # 이미 commit을 했으므로 DB에는 새 점수가 반영되어 있습니다.
+
+    info1_new = await get_anime_rank_info(db, category, new_r1)
+    info2_new = await get_anime_rank_info(db, category, new_r2)
+
     background_tasks.add_task(normalize_scores_task, AsyncSessionLocal)
 
     response_data = {
@@ -150,6 +174,12 @@ async def vote(
         "old_r2": round(old_r2),
         "new_r2": round(new_r2),
         "diff_r2": round(new_r2 - old_r2),
+        # Rank Info
+        "old_rank_1": info1_old["rank"],
+        "new_rank_1": info1_new["rank"],
+        "old_rank_2": info2_old["rank"],
+        "new_rank_2": info2_new["rank"],
+        "total_animes": info1_old["total"],
         "next_url": redirect_to if redirect_to else "/battle",
     }
 
