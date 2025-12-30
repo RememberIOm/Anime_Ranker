@@ -4,7 +4,10 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Depends, Request, HTTPException, status
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.templating import Jinja2Templates
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.exception_handlers import (
+    http_exception_handler as default_http_exception_handler,
+)
 
 from config import settings
 from database import engine, Base, AsyncSessionLocal
@@ -30,6 +33,7 @@ def verify_credentials(credentials: HTTPBasicCredentials = Depends(security)):
     )
 
     if not (is_correct_username and is_correct_password):
+        # 브라우저가 로그인 창을 띄우게 하려면 WWW-Authenticate 헤더가 필수입니다.
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",
@@ -57,6 +61,29 @@ async def lifespan(app: FastAPI):
 # --- App Init ---
 app = FastAPI(lifespan=lifespan, dependencies=[Depends(verify_credentials)])
 templates = Jinja2Templates(directory="templates")
+
+
+# --- Custom Exception Handlers ---
+@app.exception_handler(HTTPException)
+async def custom_http_exception_handler(request: Request, exc: HTTPException):
+    """
+    HTTPException(특히 401) 발생 시 브라우저 요청이면 HTML 페이지를 반환합니다.
+    """
+    if exc.status_code == status.HTTP_401_UNAUTHORIZED:
+        # Accept 헤더에 'text/html'이 포함된 경우 (브라우저 접근)
+        if "text/html" in request.headers.get("accept", ""):
+            return templates.TemplateResponse(
+                "401.html",
+                {"request": request},
+                status_code=exc.status_code,
+                # WWW-Authenticate 헤더를 유지해야 브라우저가 상황을 인지합니다.
+                # 다만 사용자가 '취소'를 누른 후에는 페이지 본문이 보입니다.
+                headers=exc.headers,
+            )
+
+    # 그 외의 경우(API 요청 등)는 기본 핸들러(JSON) 사용
+    return await default_http_exception_handler(request, exc)
+
 
 # Include Routers
 app.include_router(battle.router)
