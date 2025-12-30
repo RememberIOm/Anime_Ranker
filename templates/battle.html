@@ -186,34 +186,36 @@
 
             // 1. 모달 띄우기
             modal.classList.remove('hidden');
-            // 약간의 딜레이 후 투명도 조절로 페이드인 효과
             setTimeout(() => { modal.classList.remove('opacity-0'); }, 10);
 
-            // 2. 초기 숫자 세팅 (이전 점수)
+            // 2. 초기 숫자 세팅
             score1El.innerText = data.old_r1;
             score2El.innerText = data.old_r2;
 
-            // 3. 증가/감소 텍스트 세팅 및 색상 결정
             setDiffStyle(diff1El, data.diff_r1);
             setDiffStyle(diff2El, data.diff_r2);
 
-            // 4. 숫자 카운팅 애니메이션 (0.5초 대기 후 시작)
+            // 3. 숫자 카운팅 애니메이션 (0.1초 후 시작, 속도 개선)
             setTimeout(() => {
-                animateValue(score1El, data.old_r1, data.new_r1, 1000);
-                animateValue(score2El, data.old_r2, data.new_r2, 1000);
+                animateValue(score1El, data.old_r1, data.new_r1, 500); // 500ms 동안 숫자 변화
+                animateValue(score2El, data.old_r2, data.new_r2, 500);
 
-                // 증감 표시 등장
                 diff1El.classList.remove('opacity-0', 'translate-y-4');
                 diff2El.classList.remove('opacity-0', 'translate-y-4');
 
-                // 진행바 참
-                progressBar.style.width = "100%";
-            }, 300);
+                // 진행바 스타일 수정: 1초짜리 애니메이션 (duration-[1000ms])
+                progressBar.className = "h-full bg-yellow-400 w-0 transition-all duration-[1000ms] ease-out";
+                // 약간의 틱(tick) 이후 실행해야 transition이 먹음
+                requestAnimationFrame(() => {
+                    progressBar.style.width = "100%";
+                });
 
-            // 5. 완료 후 다음 페이지로 이동 (총 2초 후)
+            }, 100);
+
+            // 4. 완료 후 이동 (총 1.2초 후 이동)
             setTimeout(() => {
                 window.location.href = data.next_url;
-            }, 1800);
+            }, 1200);
         }
 
         function setDiffStyle(element, diff) {

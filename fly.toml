@@ -20,6 +20,9 @@ primary_region = 'nrt'
   source = "anime_data"
   destination = "/data"  # Dockerfile 내부의 마운트 경로
 
+[env]
+  DB_PATH = "/data/anime_rank.db"
+
 [[vm]]
   memory = '512mb'
   cpus = 1
