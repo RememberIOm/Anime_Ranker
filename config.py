@@ -17,10 +17,15 @@ class Settings(BaseSettings):
     ELO_DECAY_FACTOR: int = 25
 
     # --- Matchmaking Constants ---
-    # 비슷한 점수대 매칭을 시도할 확률 (0.0 ~ 1.0)
     MATCH_SMART_RATE: float = 0.8
-    # 비슷한 점수대의 범위 (점)
     MATCH_SCORE_RANGE: int = 300
+
+    # --- Probability Calculation Constants (New) ---
+    # 두 상대의 점수가 같을 때의 최대 무승부 확률 (0.0 ~ 1.0)
+    # 예: 0.25는 동점일 때 25% 확률로 무승부가 난다고 가정
+    ELO_DRAW_MAX: float = 0.25
+    # 무승부 확률이 줄어드는 점수 차이의 척도 (Gaussian Scale)
+    ELO_DRAW_SCALE: float = 400.0
 
     class Config:
         env_file = ".env"

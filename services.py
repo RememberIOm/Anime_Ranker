@@ -4,7 +4,7 @@ import random
 import pandas as pd
 import os
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, update, and_, or_
+from sqlalchemy import select, func, update, and_
 from sqlalchemy.sql.expression import func as sql_func
 
 from models import Anime
@@ -17,7 +17,6 @@ from config import settings
 def get_dynamic_k_factor(matches_played: int) -> float:
     """
     매치 횟수에 따라 K-Factor를 동적으로 계산합니다.
-    초반에는 높고(빠른 자리 잡기), 후반에는 낮아집니다(안정화).
     Formula: K = K_min + (K_max - K_min) * exp(-matches / decay)
     """
     k_diff = settings.ELO_K_MAX - settings.ELO_K_MIN
@@ -27,9 +26,42 @@ def get_dynamic_k_factor(matches_played: int) -> float:
 
 def calculate_expected_score(rating_a: float, rating_b: float) -> float:
     """
-    로지스틱 곡선을 이용한 승률 기대값 계산
+    로지스틱 곡선을 이용한 승률 기대값 계산 (E_a)
+    E_a = P(Win) + 0.5 * P(Draw)
     """
     return 1 / (1 + 10 ** ((rating_b - rating_a) / 400))
+
+
+def get_match_probabilities(rating_a: float, rating_b: float) -> dict[str, float]:
+    """
+    두 점수 차이에 기반하여 승리(A), 무승부, 패배(B승리) 확률을 계산합니다.
+    Draw 확률은 점수 차가 0일 때 최대값(ELO_DRAW_MAX)을 가지며, 차이가 클수록 줄어듭니다.
+    """
+    # 1. Elo Expected Score (승리 기댓값: 승리 + 절반의 무승부)
+    expected_a = calculate_expected_score(rating_a, rating_b)
+
+    # 2. 무승부 확률 추정 (Gaussian Function)
+    # 점수 차이가 클수록 무승부 확률은 0에 수렴
+    delta = abs(rating_a - rating_b)
+    p_draw = settings.ELO_DRAW_MAX * math.exp(-((delta / settings.ELO_DRAW_SCALE) ** 2))
+
+    # 3. 승리/패배 확률 분리
+    # E_a = P(Win_A) + 0.5 * P(Draw)
+    # 따라서 P(Win_A) = E_a - 0.5 * P(Draw)
+    p_win_a = max(0.0, expected_a - 0.5 * p_draw)
+
+    # P(Win_B)도 동일한 방식으로 계산 (expected_b = 1 - expected_a)
+    expected_b = 1.0 - expected_a
+    p_win_b = max(0.0, expected_b - 0.5 * p_draw)
+
+    # 4. 정규화 (합이 정확히 100%가 되도록 조정)
+    total_prob = p_win_a + p_draw + p_win_b
+
+    return {
+        "win_a": round((p_win_a / total_prob) * 100, 1),
+        "draw": round((p_draw / total_prob) * 100, 1),
+        "win_b": round((p_win_b / total_prob) * 100, 1),
+    }
 
 
 def calculate_elo_update(
@@ -67,7 +99,6 @@ async def load_initial_data(db: AsyncSession) -> None:
         try:
             df = pd.read_csv("animation.csv")
             for _, row in df.iterrows():
-                # 기존 평점을 Elo 1200 기준으로 변환 (대략적인 매핑)
                 base_score = 1200 + (float(row.get("총점", 7.0)) - 7.0) * 100
                 anime = Anime(
                     name=row["이름"],
@@ -88,16 +119,12 @@ async def load_initial_data(db: AsyncSession) -> None:
 
 async def normalize_scores_task(db_factory) -> None:
     """
-    [백그라운드 작업]
-    전체 평균 점수가 1200점에서 너무 벗어나지 않도록 보정합니다. (인플레이션/디플레이션 방지)
-    사용자 경험을 해치지 않기 위해 미세한 조정만 수행합니다.
+    [백그라운드 작업] 점수 인플레이션/디플레이션 방지 보정
     """
     async with db_factory() as db:
         categories = ["story", "visual", "ost", "voice", "char", "fun"]
         is_modified = False
 
-        # 통계 쿼리
-        # (실제 서비스에서는 캐싱하거나 매번 돌리지 않는 것이 좋음)
         result = await db.execute(select(Anime))
         animes = result.scalars().all()
 
@@ -110,10 +137,8 @@ async def normalize_scores_task(db_factory) -> None:
             current_avg = total_val / len(animes)
             diff = current_avg - 1200.0
 
-            # 평균이 1점 이상 차이나면 보정 실행 (너무 잦은 보정 방지)
             if abs(diff) > 1.0:
                 is_modified = True
-                # SQL 차원에서 일괄 업데이트 (Python Loop보다 효율적)
                 stmt = update(Anime).values(
                     {attr_name: getattr(Anime, attr_name) - diff}
                 )
@@ -127,20 +152,14 @@ async def get_match_pair(
     db: AsyncSession, focus_id: int | None = None
 ) -> tuple[Anime | None, Anime | None]:
     """
-    대결 상대를 선정합니다.
-    1. Focus 모드: 해당 ID와 적절한 상대를 매칭.
-    2. 일반 모드:
-       - 80% 확률: 점수대가 비슷한 '라이벌' 매칭 (Smart Match).
-       - 20% 확률: 완전 랜덤 매칭 (랭킹 고착화 방지).
+    대결 상대를 선정합니다 (Smart Match + Random).
     """
-    # 1. 첫 번째 애니메이션 선택 (Anime A)
+    # 1. 첫 번째 애니메이션 선택
     if focus_id:
         anime1 = await db.get(Anime, focus_id)
         if not anime1:
             return None, None
     else:
-        # 무작위로 하나 선택
-        # (개선점: 매치 수가 적은 애니메이션을 우선 노출하는 로직을 추가할 수도 있음)
         query = select(Anime).order_by(sql_func.random()).limit(1)
         result = await db.execute(query)
         anime1 = result.scalar()
@@ -148,16 +167,11 @@ async def get_match_pair(
     if not anime1:
         return None, None
 
-    # 2. 두 번째 애니메이션 선택 (Anime B)
-    # Smart Match 여부 결정 (Focus 모드거나, 랜덤 확률에 당첨될 경우)
+    # 2. 두 번째 애니메이션 선택 (Smart Match 로직)
     use_smart_match = random.random() < settings.MATCH_SMART_RATE
     anime2 = None
 
     if use_smart_match:
-        # Anime A의 종합 점수 기준으로 ±Range 내의 상대 검색
-        # 단, 카테고리가 랜덤으로 정해지므로 total_score 대신 평균적인 매칭을 위해 total_score 프로퍼티 사용 불가
-        # DB 레벨 계산이 복잡하므로, 가장 최근 갱신된 rating_fun(종합재미) 혹은 단순 랜덤성을 섞음.
-        # 여기서는 rating_fun(종합 재미)이 대표성이 있다고 가정하고 이를 기준으로 범위 검색.
         target_score = anime1.rating_fun
         min_score = target_score - settings.MATCH_SCORE_RANGE
         max_score = target_score + settings.MATCH_SCORE_RANGE
@@ -177,7 +191,6 @@ async def get_match_pair(
         result = await db.execute(query)
         anime2 = result.scalar()
 
-    # Smart Match 대상을 못 찾았거나(범위 밖), 랜덤 매칭 턴인 경우
     if not anime2:
         query = (
             select(Anime)

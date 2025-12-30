@@ -48,7 +48,7 @@
 
 ### 1. 클론 및 가상환경 설정
 ```bash
-git clone https://github.com/your-username/anime-ranker.git
+git clone https://github.com/RememberIOm/anime-ranker.git
 cd anime-ranker
 
 python -m venv venv

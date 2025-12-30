@@ -32,13 +32,11 @@
         <div id="card-1" onclick="submitVote('1')"
             class="group relative bg-white dark:bg-gray-800 rounded-3xl p-6 md:p-8 shadow-xl hover:shadow-2xl hover:shadow-brand-500/20 border-2 border-transparent hover:border-brand-500 cursor-pointer transition-all duration-300 transform hover:-translate-y-2 flex flex-col justify-center items-center min-h-[280px] md:min-h-[450px]">
 
-            <!-- Badge -->
             <div
                 class="absolute -top-3 -left-3 md:-top-4 md:-left-4 w-10 h-10 md:w-12 md:h-12 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center font-black text-lg md:text-xl text-gray-400 group-hover:bg-brand-500 group-hover:text-white transition-colors z-10 shadow-sm">
                 A
             </div>
 
-            <!-- Title Area -->
             <div class="flex-grow flex items-center justify-center w-full my-4">
                 <h3
                     class="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-black text-center text-gray-800 dark:text-gray-100 group-hover:text-brand-600 dark:group-hover:text-brand-400 break-words leading-tight transition-colors w-full px-2">
@@ -46,7 +44,6 @@
                 </h3>
             </div>
 
-            <!-- Rating Info -->
             <div class="mt-4 flex justify-center">
                 <span
                     class="bg-gray-100 dark:bg-gray-700 px-4 py-1.5 rounded-full text-xs md:text-sm font-mono text-gray-500 dark:text-gray-400 group-hover:text-brand-600 dark:group-hover:text-brand-300 transition-colors">
@@ -54,7 +51,6 @@
                 </span>
             </div>
 
-            <!-- 선택 오버레이 -->
             <div id="result-overlay-1"
                 class="absolute inset-0 bg-brand-600/10 dark:bg-brand-400/10 rounded-3xl border-4 border-brand-500 hidden transition-all z-20">
                 <div class="absolute inset-0 flex items-center justify-center">
@@ -64,12 +60,27 @@
             </div>
         </div>
 
-        <!-- VS Section (Center) -->
-        <div class="flex flex-col items-center justify-center gap-4 z-20 py-4 md:py-0">
+        <!-- VS Section (Center) & Probability Bar -->
+        <div class="flex flex-col items-center justify-center gap-4 z-20 py-4 md:py-0 min-w-[120px]">
             <div
                 class="w-14 h-14 md:w-16 md:h-16 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center font-black text-lg md:text-xl italic text-gray-500 dark:text-gray-400 shadow-inner ring-4 ring-gray-50 dark:ring-gray-900">
                 VS
             </div>
+
+            <!-- 확률 그래프 -->
+            <div class="w-full flex flex-col gap-1 items-center mb-2 px-2">
+                <div class="flex justify-between w-full text-[10px] font-bold text-gray-400 dark:text-gray-500 px-1">
+                    <span class="text-brand-500">{{ probs.win_a }}%</span>
+                    <span>Draw</span>
+                    <span class="text-pink-500">{{ probs.win_b }}%</span>
+                </div>
+                <div class="flex w-full h-1.5 rounded-full overflow-hidden bg-gray-100 dark:bg-gray-800">
+                    <div style="width: {{ probs.win_a }}%" class="bg-brand-500 h-full"></div>
+                    <div style="width: {{ probs.draw }}%" class="bg-gray-300 dark:bg-gray-600 h-full"></div>
+                    <div style="width: {{ probs.win_b }}%" class="bg-pink-500 h-full"></div>
+                </div>
+            </div>
+
             <button onclick="submitVote('draw')"
                 class="px-6 py-2 rounded-full border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 font-bold text-xs md:text-sm transition-colors whitespace-nowrap shadow-sm bg-white dark:bg-gray-800">
                 무승부
@@ -80,13 +91,11 @@
         <div id="card-2" onclick="submitVote('2')"
             class="group relative bg-white dark:bg-gray-800 rounded-3xl p-6 md:p-8 shadow-xl hover:shadow-2xl hover:shadow-pink-500/20 border-2 border-transparent hover:border-pink-500 cursor-pointer transition-all duration-300 transform hover:-translate-y-2 flex flex-col justify-center items-center min-h-[280px] md:min-h-[450px]">
 
-            <!-- Badge -->
             <div
                 class="absolute -top-3 -right-3 md:-top-4 md:-right-4 w-10 h-10 md:w-12 md:h-12 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center font-black text-lg md:text-xl text-gray-400 group-hover:bg-pink-500 group-hover:text-white transition-colors z-10 shadow-sm">
                 B
             </div>
 
-            <!-- Title Area -->
             <div class="flex-grow flex items-center justify-center w-full my-4">
                 <h3
                     class="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-black text-center text-gray-800 dark:text-gray-100 group-hover:text-pink-600 dark:group-hover:text-pink-400 break-words leading-tight transition-colors w-full px-2">
@@ -94,7 +103,6 @@
                 </h3>
             </div>
 
-            <!-- Rating Info -->
             <div class="mt-4 flex justify-center">
                 <span
                     class="bg-gray-100 dark:bg-gray-700 px-4 py-1.5 rounded-full text-xs md:text-sm font-mono text-gray-500 dark:text-gray-400 group-hover:text-pink-600 dark:group-hover:text-pink-300 transition-colors">
@@ -102,7 +110,6 @@
                 </span>
             </div>
 
-            <!-- 선택 오버레이 -->
             <div id="result-overlay-2"
                 class="absolute inset-0 bg-pink-600/10 dark:bg-pink-400/10 rounded-3xl border-4 border-pink-500 hidden transition-all z-20">
                 <div class="absolute inset-0 flex items-center justify-center">
@@ -157,7 +164,6 @@
     const redirectTo = "{% if focus_mode %}/battle/focus/{{ focus_id }}{% endif %}";
 
     async function submitVote(winner) {
-        // UI 즉시 반응
         if (winner === '1') document.getElementById('result-overlay-1').classList.remove('hidden');
         if (winner === '2') document.getElementById('result-overlay-2').classList.remove('hidden');
 
@@ -192,8 +198,7 @@
         const modalContent = modal.querySelector('div');
 
         modal.classList.remove('hidden');
-        // 강제 리플로우를 통한 애니메이션 트리거
-        void modal.offsetWidth;
+        void modal.offsetWidth; // Force Reflow
         modal.classList.remove('opacity-0');
         modalContent.classList.remove('scale-95');
         modalContent.classList.add('scale-100');
@@ -204,7 +209,6 @@
         setDiffStyle(diff1El, data.diff_r1);
         setDiffStyle(diff2El, data.diff_r2);
 
-        // 숫자 카운팅 및 변화 표시
         setTimeout(() => {
             animateValue(score1El, data.old_r1, data.new_r1, 500);
             animateValue(score2El, data.old_r2, data.new_r2, 500);

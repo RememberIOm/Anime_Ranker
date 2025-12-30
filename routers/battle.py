@@ -9,12 +9,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from database import get_db, AsyncSessionLocal
 from models import Anime
 from schemas import VoteResponse
-from services import get_match_pair, calculate_elo_update, normalize_scores_task
+from services import (
+    get_match_pair,
+    calculate_elo_update,
+    normalize_scores_task,
+    get_match_probabilities,
+)
 
 router = APIRouter(prefix="/battle", tags=["battle"])
 templates = Jinja2Templates(directory="templates")
 
-# DB 세션 타입 힌트 (FastAPI Clean Code)
 SessionDep = Annotated[AsyncSession, Depends(get_db)]
 
 CATEGORIES = [
@@ -29,7 +33,6 @@ CATEGORIES = [
 
 @router.get("", response_class=HTMLResponse)
 async def get_battle(request: Request, db: SessionDep):
-    # 변경된 서비스 함수 호출 (Smart Matchmaking 적용)
     anime1, anime2 = await get_match_pair(db)
 
     if not anime1 or not anime2:
@@ -45,6 +48,12 @@ async def get_battle(request: Request, db: SessionDep):
         )
 
     selected_category = random.choice(CATEGORIES)
+    category_key = selected_category[0]
+
+    # 확률 계산 (현재 카테고리 점수 기준)
+    r1 = getattr(anime1, f"rating_{category_key}")
+    r2 = getattr(anime2, f"rating_{category_key}")
+    probs = get_match_probabilities(r1, r2)
 
     return templates.TemplateResponse(
         "battle.html",
@@ -52,15 +61,15 @@ async def get_battle(request: Request, db: SessionDep):
             "request": request,
             "anime1": anime1,
             "anime2": anime2,
-            "category_key": selected_category[0],
+            "category_key": category_key,
             "category_name": selected_category[1],
+            "probs": probs,  # 확률 데이터 전달
         },
     )
 
 
 @router.get("/focus/{anime_id}", response_class=HTMLResponse)
 async def focus_battle(anime_id: int, request: Request, db: SessionDep):
-    # 변경된 서비스 함수 호출 (Focus ID 전달)
     anime1, anime2 = await get_match_pair(db, focus_id=anime_id)
 
     if not anime1:
@@ -69,6 +78,12 @@ async def focus_battle(anime_id: int, request: Request, db: SessionDep):
         return HTMLResponse("상대할 애니메이션 데이터가 부족합니다.", status_code=200)
 
     selected_category = random.choice(CATEGORIES)
+    category_key = selected_category[0]
+
+    # 확률 계산
+    r1 = getattr(anime1, f"rating_{category_key}")
+    r2 = getattr(anime2, f"rating_{category_key}")
+    probs = get_match_probabilities(r1, r2)
 
     return templates.TemplateResponse(
         "battle.html",
@@ -76,10 +91,11 @@ async def focus_battle(anime_id: int, request: Request, db: SessionDep):
             "request": request,
             "anime1": anime1,
             "anime2": anime2,
-            "category_key": selected_category[0],
+            "category_key": category_key,
             "category_name": selected_category[1],
             "focus_mode": True,
             "focus_id": anime_id,
+            "probs": probs,
         },
     )
 
@@ -95,32 +111,27 @@ async def vote(
     winner: str = Form(...),
     redirect_to: str = Form(None),
 ):
-    # Fetch Data
     a1 = await db.get(Anime, anime1_id)
     a2 = await db.get(Anime, anime2_id)
 
     if not a1 or not a2:
         return JSONResponse({"error": "Anime not found"}, status_code=404)
 
-    # 동적 속성 접근
     attr_name = f"rating_{category}"
     old_r1 = getattr(a1, attr_name)
     old_r2 = getattr(a2, attr_name)
 
-    # Determine Result
     if winner == "1":
         actual_score = 1.0
     elif winner == "2":
         actual_score = 0.0
     else:
-        actual_score = 0.5  # Draw
+        actual_score = 0.5
 
-    # Calculate Elo (Updated logic used internally)
     new_r1, new_r2 = calculate_elo_update(
         old_r1, old_r2, actual_score, a1.matches_played, a2.matches_played
     )
 
-    # Update DB
     setattr(a1, attr_name, new_r1)
     setattr(a2, attr_name, new_r2)
     a1.matches_played += 1
@@ -128,7 +139,6 @@ async def vote(
 
     await db.commit()
 
-    # Trigger Background Normalization
     background_tasks.add_task(normalize_scores_task, AsyncSessionLocal)
 
     response_data = {
